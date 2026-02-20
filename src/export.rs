@@ -93,7 +93,6 @@ pub async fn export2html(
 
     // Insert the posts html into a template and write as index.html
     let template = std::fs::read_to_string("template.html")?
-        .replace("{{thread_name}}", &thread_name)
         .replace("{{posts}}", &posts_html);
     std::fs::write(format!("{}/index.html", dir), template)?;
     
@@ -109,13 +108,6 @@ fn render_post(
 
     html.push_str("  <div class=\"post-head\">\n");
 
-    // Sage
-    if let Some(ref mailto) = post.mailto {
-        if mailto.contains("sage") {
-            html.push_str("    <span class=\"sage\">[sage]</span>\n");
-        }
-    }
-
     // Subject
     if let Some(ref subject) = post.subject {
         html.push_str(&format!(
@@ -127,7 +119,7 @@ fn render_post(
     // Name /w mailto/sage
     let name = post.name.as_deref().unwrap_or("Аноним");
     let name_display = if let Some(ref mailto) = post.mailto {
-        format!("[mailto:{}] {}", mailto, name)
+        format!("[{}] {}", mailto, name)
     } else {
         name.to_string()
     };
@@ -187,10 +179,13 @@ fn render_images(
         };
 
         html.push_str(&format!(
-            "    <div class=\"post-image\">\n      <a href=\"{}\" target=\"_blank\" title=\"{}\">\n        <img src=\"{}\" alt=\"\" loading=\"lazy\">\n      </a>\n    </div>\n",
+            "    <div class=\"post-image\">\n      <a href=\"{}\" target=\"_blank\" title=\"{}\">\n        <img src=\"{}\" alt=\"\" loading=\"lazy\">\n      </a>\n      <div class=\"post-image-info\">{} (<a href=\"{}\" target=\"_blank\" class=\"post-image-link\">o</a>, <a href=\"{}\" target=\"_blank\" class=\"post-image-link\">t</a>)</div>\n    </div>\n",
             html_escape(&href),
             html_escape(&file.name_orig),
             html_escape(&img_src),
+            html_escape(&file.name_orig),
+            html_escape(&file.url),
+            html_escape(&file.url_thumb),
         ));
     }
     html.push_str("  </div>\n");
