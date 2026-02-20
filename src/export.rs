@@ -87,7 +87,7 @@ pub async fn export2html(
             .filter_map(|f| f.url_thumb.split('/').last().map(|name| (f, name)))
         {
             let path = format!("{}/{}", dir, filename);
-            download(&f.url, &path).await?;
+            download(&f.url_thumb, &path).await?;
         }
     }
 
