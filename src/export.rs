@@ -37,9 +37,9 @@ fn render_text_to_html(text: &str) -> String {
 /// Export the thread to a simple static HTML
 ///
 /// Creates a directory as follows:
-/// ./{thread_name}, where {thread_name} is OP subject or first 20 characters of OP text
-/// If download_files is true, downloads files to ./{thread_name}/files
-/// If download_thumbnails is true, downloads thumbnails to ./{thread_name}/thumb
+/// ./{thread_id}, where {thread_nid} is OP ID
+/// If download_files is true, downloads files to ./{thread_id}/files
+/// If download_thumbnails is true, downloads thumbnails to ./{thread_id}/thumb
 ///
 /// WARNING: If the directory already exists, it will be overwritten
 pub async fn export2html(
@@ -51,15 +51,8 @@ pub async fn export2html(
         return Err("No posts to export".into());
     }
 
-    // Get thread name
-    let thread_name: String = format!(
-        "{}_{}",
-        posts[0].subject.clone().unwrap_or_else(|| posts[0].text.chars().take(20).collect()),
-        posts[0].id
-    );
-
     // Create directories
-    let dir = format!("{}", thread_name);
+    let dir = format!("{}", posts[0].id);
     std::fs::create_dir_all(&dir)?;
 
     // Render the thread
