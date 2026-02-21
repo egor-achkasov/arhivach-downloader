@@ -107,10 +107,27 @@ impl Post {
         ),
         Box<dyn std::error::Error>
     > {
-        let sel = |s| scraper::Selector::parse(s).unwrap();
+        static SEL_SPAN_POST_ID_A_HREF: std::sync::LazyLock<scraper::Selector> = std::sync::LazyLock::new(
+            || scraper::Selector::parse("span.post_id a[href]").unwrap()
+        );
+        static SEL_H1_POST_SUBJECT: std::sync::LazyLock<scraper::Selector> = std::sync::LazyLock::new(
+            || scraper::Selector::parse("h1.post_subject").unwrap()
+        );
+        static SEL_SPAN_POSTER_NAME: std::sync::LazyLock<scraper::Selector> = std::sync::LazyLock::new(
+            || scraper::Selector::parse("span.poster_name").unwrap()
+        );
+        static SEL_A_POST_MAIL: std::sync::LazyLock<scraper::Selector> = std::sync::LazyLock::new(
+            || scraper::Selector::parse("a.post_mail").unwrap()
+        );
+        static SEL_SPAN_POST_TIME: std::sync::LazyLock<scraper::Selector> = std::sync::LazyLock::new(
+            || scraper::Selector::parse("span.post_time").unwrap()
+        );
+        static SEL_SPAN_POST_NUM: std::sync::LazyLock<scraper::Selector> = std::sync::LazyLock::new(
+            || scraper::Selector::parse("span.post_num").unwrap()
+        );
 
         let id: u32 = post_head
-            .select(&sel("span.post_id a[href]"))
+            .select(&SEL_SPAN_POST_ID_A_HREF)
             .next()
             .and_then(|el| el.value().attr("href"))
             .and_then(|href| href.strip_prefix('#'))
@@ -118,31 +135,31 @@ impl Post {
             .parse()?;
 
         let subject = post_head
-            .select(&sel("h1.post_subject"))
+            .select(&SEL_H1_POST_SUBJECT)
             .next()
             .map(|el| el.text().collect::<String>());
 
         let name = post_head
-            .select(&sel("span.poster_name"))
+            .select(&SEL_SPAN_POSTER_NAME)
             .next()
             .map(|el| el.text().collect::<String>())
             .and_then(|n| if n == "Аноним" { None } else { Some(n) });
 
         let mailto = post_head
-            .select(&sel("a.post_mail"))
+            .select(&SEL_A_POST_MAIL)
             .next()
             .and_then(|el| el.value().attr("title"))
             .map(|s| s.to_string());
 
         let time = post_head
-            .select(&sel("span.post_time"))
+            .select(&SEL_SPAN_POST_TIME)
             .next()
             .ok_or("missing post_time")?
             .text()
             .collect::<String>();
 
         let num = post_head
-            .select(&sel("span.post_num"))
+            .select(&SEL_SPAN_POST_NUM)
             .next()
             .ok_or("missing post_num")?
             .text()
