@@ -1,7 +1,7 @@
 use crate::post::Post;
-use crate::file::File;
 
 use anyhow::{Result, Context};
+use tracing::debug;
 
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -54,47 +54,27 @@ pub async fn export2html(
         anyhow::bail!("No posts to export");
     }
 
-    // Create directories
     let dir = format!("{}", posts[0].id);
     std::fs::create_dir_all(&dir)?;
 
-    // Render the thread
     let posts_html: String = posts
         .iter()
         .map(|p| render_post(p, download_files, download_thumbnails))
         .collect::<Vec<String>>()
         .join("\n");
-    // Download files
-    async fn download_helper(
-        base_dir: &str,
-        subdir: &str,
-        posts: &[Post],
-        get_url: fn(&File) -> &str,
-    ) -> Result<()>{
-        let dir = format!("{}/{}", base_dir, subdir);
-        std::fs::create_dir_all(&dir)
-            .with_context(|| format!("Failed to create directory {}", dir))?;
-        for (f, filename) in posts.iter().flat_map(|p| &p.files)
-            .filter_map(|f| f.url.split('/').last().map(|name| (f, name)))
-        {
-            let path = format!("{}/{}", dir, filename);
-            download(get_url(f), &path).await
-                .with_context(|| format!("Failed to download file {}", path))?;
-        }
-        Ok(())
-    }
+
     if download_files {
-        download_helper(&dir, "files", &posts, |f| &f.url).await?;
-    }
-    if download_thumbnails {
-        download_helper(&dir, "thumb", &posts, |f| &f.url_thumb).await?;
+        download_assets(&posts, &format!("{}/files", dir), "files", |f| &f.url).await?;
     }
 
-    // Insert the posts html into a template and write as index.html
+    if download_thumbnails {
+        download_assets(&posts, &format!("{}/thumb", dir), "thumbnails", |f| &f.url_thumb).await?;
+    }
+
     let template = std::fs::read_to_string("template.html")?
         .replace("{{posts}}", &posts_html);
     std::fs::write(format!("{}/index.html", dir), template)?;
-    
+
     Ok(())
 }
 
@@ -191,6 +171,49 @@ fn render_images(
     html
 }
 
+
+async fn download_assets(
+    posts: &[Post],
+    dest_dir: &str,
+    label: &str,
+    url_of: impl Fn(&crate::file::File) -> &str,
+) -> Result<()> {
+    use std::io::Write;
+
+    std::fs::create_dir_all(dest_dir)
+        .with_context(|| format!("Failed to create directory {}", dest_dir))?;
+    let t = std::time::Instant::now();
+    print!("\tDownloading {}... post 0 / {}", label, posts.len());
+    std::io::stdout().flush().ok();
+    for (i, post) in posts.iter().enumerate() {
+        for f in &post.files {
+            let url = url_of(f);
+            let filename = url.split('/').last().unwrap_or("");
+            let path = format!("{}/{}", dest_dir, filename);
+            debug!(url = %url, %path, "Downloading {}", label);
+            let mut failed = false;
+            for attempt in 0..3 {
+                match download(url, &path).await {
+                    Ok(()) => { failed = false; break; }
+                    Err(e) => {
+                        failed = true;
+                        println!("\r\tFailed to download {} {}: {}\n\t-> Waiting 3 seconds...", label, filename, e);
+                        if attempt < 2 {
+                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                        }
+                    }
+                }
+            }
+            if failed {
+                println!("\tSkipping {} {} after 3 failed attempts.", label, filename);
+            }
+        }
+        print!("\r\tDownloading {}... post {} / {}", label, i + 1, posts.len());
+        std::io::stdout().flush().ok();
+    }
+    println!(" Done ({} ms)", t.elapsed().as_millis());
+    Ok(())
+}
 
 async fn download(url: &str, path: &str) -> Result<()> {
     let bytes = reqwest::get(url).await
