@@ -1,4 +1,5 @@
 use clap::Parser;
+use anyhow::Result;
 
 use std::path::PathBuf;
 
@@ -8,7 +9,7 @@ pub struct Config{
     pub files: bool
 }
 
-pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
+pub fn parse_args() -> Result<Config> {
     #[derive(Parser)]
     #[command(about, long_about)]
     struct Cli {
@@ -41,7 +42,7 @@ pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
         }
     }
     if urls.is_empty() {
-        return Err("No URLs provided".into());
+        anyhow::bail!("No URLs provided");
     }
 
     Ok(Config {

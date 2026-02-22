@@ -1,5 +1,7 @@
 use crate::file::File;
 
+use anyhow::{Context, Result};
+
 /// Represents a single post in a thread
 #[derive(Debug, Clone)]
 pub struct Post {
@@ -23,7 +25,7 @@ pub struct Post {
 impl Post {
     pub fn parse_posts(
         html: &str,
-    ) -> Result<Vec<Post>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Post>> {
         let mut posts = Vec::new();
         
         let document = scraper::Html::parse_document(html);
@@ -45,7 +47,7 @@ impl Post {
     ///     <span class="post_comment">...</span> (see parse_post_comment function)
     /// </div>
     /// ```
-    fn parse_post(node: scraper::ElementRef) -> Result<Post, Box<dyn std::error::Error>> {
+    fn parse_post(node: scraper::ElementRef) -> Result<Post> {
         static SEL_POST_HEAD: std::sync::LazyLock<scraper::Selector> = std::sync::LazyLock::new(
             || scraper::Selector::parse("div.post_head").unwrap()
         );
@@ -56,13 +58,13 @@ impl Post {
         let post_head = node
             .select(&SEL_POST_HEAD)
             .next()
-            .ok_or("missing post_head")?;
+            .context("missing post_head")?;
         let (subject, name, mailto, time, num, id) = Post::parse_post_head(post_head)?;
 
         let post_comment = node
             .select(&SEL_POST_IMAGE_BLOCK)
             .next()
-            .ok_or("missing post_comment")?;
+            .context("missing post_comment")?;
         let (files, text) = Post::parse_post_comment(post_comment)?;
 
         Ok(Post {
@@ -104,8 +106,7 @@ impl Post {
             String,         // time
             String,         // num
             u32             // id
-        ),
-        Box<dyn std::error::Error>
+        )
     > {
         static SEL_SPAN_POST_ID_A_HREF: std::sync::LazyLock<scraper::Selector> = std::sync::LazyLock::new(
             || scraper::Selector::parse("span.post_id a[href]").unwrap()
@@ -131,7 +132,7 @@ impl Post {
             .next()
             .and_then(|el| el.value().attr("href"))
             .and_then(|href| href.strip_prefix('#'))
-            .ok_or("missing post id")?
+            .context("missing post id")?
             .parse()?;
 
         let subject = post_head
@@ -154,14 +155,14 @@ impl Post {
         let time = post_head
             .select(&SEL_SPAN_POST_TIME)
             .next()
-            .ok_or("missing post_time")?
+            .context("missing post_time")?
             .text()
             .collect::<String>();
 
         let num = post_head
             .select(&SEL_SPAN_POST_NUM)
             .next()
-            .ok_or("missing post_num")?
+            .context("missing post_num")?
             .text()
             .collect::<String>();
 
@@ -179,7 +180,7 @@ impl Post {
     /// </span>
     fn parse_post_comment(
         node: scraper::ElementRef,
-    ) -> Result<(Vec<File>, String), Box<dyn std::error::Error>> {
+    ) -> Result<(Vec<File>, String)> {
         static SEL_POST_IMAGE_BLOCK: std::sync::LazyLock<scraper::Selector> = std::sync::LazyLock::new(
             || scraper::Selector::parse("div.post_image_block").unwrap()
         );
@@ -195,7 +196,7 @@ impl Post {
         let text = Post::parse_post_comment_body(node
             .select(&SEL_POST_COMMENT_BODY)
             .next()
-            .ok_or("missing post_comment_body")?);
+            .context("missing post_comment_body")?);
         Ok((files, text))
     }
 

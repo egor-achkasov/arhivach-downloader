@@ -6,26 +6,23 @@ mod export;
 use parse_args::{Config, parse_args};
 use post::Post;
 
-async fn scrape_thread(url: &str, config: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    // Validate URL (expect https?://arhivach\.vc/thread/\d{7}/?)
-    let is_valid = matches!(
-        url.trim().trim_end_matches('/').split('/').collect::<Vec<_>>().as_slice(),
-        ["https:" | "http:", "", "arhivach.vc", "thread", _]
-    );
-    if !is_valid {
-        return Err("invalid URL".into());
-    }
+use anyhow::{Context, Ok, Result};
 
-    let html = reqwest::get(url).await?.text().await?;
-    let posts = Post::parse_posts(&html)?;
-    export::export2html(posts, config.files, config.thumb).await?;
-
+async fn scrape_thread(url: &str, config: &Config) -> Result<()> {
+    let html = reqwest::get(url).await
+        .with_context(|| format!("HTTP GET failed for {url}"))?
+        .text().await
+        .context("failed to read response body")?;
+    let posts = Post::parse_posts(&html)
+        .context("failed to parse thread HTML")?;
+    export::export2html(posts, config.files, config.thumb).await
+        .context("failed to export thread")?;
     Ok(())
 }
 
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()>{
     let config = parse_args()
         .unwrap_or_else(|e| {
             eprintln!("Error parsing arguments: {}", e);
@@ -39,4 +36,5 @@ async fn main() {
     }
 
     println!("Done");
+    Ok(())
 }

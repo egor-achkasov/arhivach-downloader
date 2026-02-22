@@ -1,4 +1,7 @@
 use crate::post::Post;
+use crate::file::File;
+
+use anyhow::{Result, Context};
 
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -46,9 +49,9 @@ pub async fn export2html(
     posts: Vec<Post>,
     download_files: bool,
     download_thumbnails: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     if posts.is_empty() {
-        return Err("No posts to export".into());
+        anyhow::bail!("No posts to export");
     }
 
     // Create directories
@@ -62,26 +65,29 @@ pub async fn export2html(
         .collect::<Vec<String>>()
         .join("\n");
     // Download files
-    if download_files {
-        let dir = format!("{}/files", dir);
-        std::fs::create_dir_all(&dir)?;
+    async fn download_helper(
+        base_dir: &str,
+        subdir: &str,
+        posts: &[Post],
+        get_url: fn(&File) -> &str,
+    ) -> Result<()>{
+        let dir = format!("{}/{}", base_dir, subdir);
+        std::fs::create_dir_all(&dir)
+            .with_context(|| format!("Failed to create directory {}", dir))?;
         for (f, filename) in posts.iter().flat_map(|p| &p.files)
             .filter_map(|f| f.url.split('/').last().map(|name| (f, name)))
         {
             let path = format!("{}/{}", dir, filename);
-            download(&f.url, &path).await?;
+            download(get_url(f), &path).await
+                .with_context(|| format!("Failed to download file {}", path))?;
         }
+        Ok(())
     }
-    // Download thumbnails
+    if download_files {
+        download_helper(&dir, "files", &posts, |f| &f.url).await?;
+    }
     if download_thumbnails {
-        let dir = format!("{}/thumb", dir);
-        std::fs::create_dir_all(&dir)?;
-        for (f, filename) in posts.iter().flat_map(|p| &p.files)
-            .filter_map(|f| f.url_thumb.split('/').last().map(|name| (f, name)))
-        {
-            let path = format!("{}/{}", dir, filename);
-            download(&f.url_thumb, &path).await?;
-        }
+        download_helper(&dir, "thumb", &posts, |f| &f.url_thumb).await?;
     }
 
     // Insert the posts html into a template and write as index.html
@@ -186,8 +192,12 @@ fn render_images(
 }
 
 
-async fn download(url: &str, path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let bytes = reqwest::get(url).await?.bytes().await?;
-    std::fs::write(path, &bytes)?;
+async fn download(url: &str, path: &str) -> Result<()> {
+    let bytes = reqwest::get(url).await
+        .with_context(|| format!("HTTP GET failed for {}", url))?
+        .bytes().await
+        .context("failed to read response body")?;
+    std::fs::write(path, &bytes)
+        .with_context(|| format!("failed to write {}", path))?;
     Ok(())
 }

@@ -5,8 +5,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.102"
 clap = { version = "4.5.57", features = ["derive"] }
 regex = "1.12.3"
 reqwest = { version = "0.12", features = ["blocking"] }
 scraper = "0.25.0"
 tokio = { version = "1.49.0", features = ["macros", "rt", "rt-multi-thread"] }
+tracing = "0.1.44"
