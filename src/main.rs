@@ -8,16 +8,16 @@ use post::Post;
 
 use anyhow::{Context, Ok, Result};
 
-async fn scrape_thread(url: &str, config: &Config) -> Result<()> {
+fn scrape_thread(url: &str, config: &Config) -> Result<()> {
     use std::io::Write;
     let t_total = std::time::Instant::now();
 
     print!("\tGetting thread...");
     std::io::stdout().flush().ok();
     let t = std::time::Instant::now();
-    let html = reqwest::get(url).await
+    let html = reqwest::blocking::get(url)
         .with_context(|| format!("HTTP GET failed for {url}"))?
-        .text().await
+        .text()
         .context("failed to read response body")?;
     println!(" Done ({} ms)", t.elapsed().as_millis());
 
@@ -28,7 +28,7 @@ async fn scrape_thread(url: &str, config: &Config) -> Result<()> {
         .context("failed to parse thread HTML")?;
     println!(" Done ({} ms)", t.elapsed().as_millis());
 
-    export::export2html(posts, config.files, config.thumb).await
+    export::export2html(posts, config.files, config.thumb)
         .context("failed to export thread")?;
 
     println!("Done processing {} ({} ms)", url, t_total.elapsed().as_millis());
@@ -36,8 +36,7 @@ async fn scrape_thread(url: &str, config: &Config) -> Result<()> {
 }
 
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let config = parse_args()
         .unwrap_or_else(|e| {
             eprintln!("Error: {}", e);
@@ -46,7 +45,7 @@ async fn main() -> Result<()> {
 
     for url in &config.urls {
         println!("Processing {}:", url);
-        scrape_thread(url, &config).await
+        scrape_thread(url, &config)
             .unwrap_or_else(|e| eprintln!("Error processing {}: {:#}", url, e));
     }
 

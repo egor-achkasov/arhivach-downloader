@@ -44,7 +44,7 @@ fn render_text_to_html(text: &str) -> String {
 /// If download_thumbnails is true, downloads thumbnails to ./{thread_id}/thumb
 ///
 /// WARNING: If the directory already exists, it will be overwritten
-pub async fn export2html(
+pub fn export2html(
     posts: Vec<Post>,
     download_files: bool,
     download_thumbnails: bool,
@@ -63,11 +63,11 @@ pub async fn export2html(
         .join("\n");
 
     if download_files {
-        download_assets(&posts, &format!("{}/files", dir), "files", |f| &f.url).await?;
+        download_assets(&posts, &format!("{}/files", dir), "files", |f| &f.url)?;
     }
 
     if download_thumbnails {
-        download_assets(&posts, &format!("{}/thumb", dir), "thumbnails", |f| &f.url_thumb).await?;
+        download_assets(&posts, &format!("{}/thumb", dir), "thumbnails", |f| &f.url_thumb)?;
     }
 
     let template = std::fs::read_to_string("template.html")?
@@ -171,7 +171,7 @@ fn render_images(
 }
 
 
-async fn download_assets(
+fn download_assets(
     posts: &[Post],
     dest_dir: &str,
     label: &str,
@@ -189,20 +189,15 @@ async fn download_assets(
             let url = url_of(f);
             let filename = url.split('/').last().unwrap_or("");
             let path = format!("{}/{}", dest_dir, filename);
-            let mut failed = false;
-            for attempt in 0..3 {
-                match download(url, &path).await {
-                    Ok(()) => { failed = false; break; }
-                    Err(e) => {
-                        failed = true;
-                        println!("\r\tFailed to download {} {}: {}\n\t-> Waiting 3 seconds...", label, filename, e);
-                        if attempt < 2 {
-                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                        }
-                    }
-                }
+            let mut result = Err(anyhow::anyhow!("no attempts"));
+            for _ in 0..3 {
+                result = download(url, &path);
+                if result.is_ok() { break; }
+                let e = result.as_ref().unwrap_err();
+                println!("\r\tFailed to download {} {}: {}\n\t-> Waiting 3 seconds...", label, filename, e);
+                std::thread::sleep(std::time::Duration::from_secs(3));
             }
-            if failed {
+            if result.is_err() {
                 println!("\tSkipping {} {} after 3 failed attempts.", label, filename);
             }
         }
@@ -213,10 +208,10 @@ async fn download_assets(
     Ok(())
 }
 
-async fn download(url: &str, path: &str) -> Result<()> {
-    let bytes = reqwest::get(url).await
+fn download(url: &str, path: &str) -> Result<()> {
+    let bytes = reqwest::blocking::get(url)
         .with_context(|| format!("HTTP GET failed for {}", url))?
-        .bytes().await
+        .bytes()
         .context("failed to read response body")?;
     std::fs::write(path, &bytes)
         .with_context(|| format!("failed to write {}", path))?;
