@@ -144,7 +144,7 @@ fn render_images(
     let mut html = String::from("  <div class=\"post-images\">\n");
     for file in files {
         let href = if download_files && !file.url.is_empty() {
-            format!("files/{}", file.name_timestamp)
+            format!("files/{}", file.url.split('/').last().unwrap_or(""))
         } else {
             file.url.clone()
         };
