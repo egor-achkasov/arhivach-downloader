@@ -1,4 +1,4 @@
-use crate::post::Post;
+use crate::{parse_args::Config, post::Post};
 
 use anyhow::{Result, Context};
 
@@ -39,16 +39,12 @@ fn render_text_to_html(text: &str) -> String {
 /// Export the thread to a simple static HTML
 ///
 /// Creates a directory as follows:
-/// ./{thread_id}, where {thread_nid} is OP ID
+/// ./{thread_id}, where {thread_id} is OP ID
 /// If download_files is true, downloads files to ./{thread_id}/files
 /// If download_thumbnails is true, downloads thumbnails to ./{thread_id}/thumb
 ///
 /// WARNING: If the directory already exists, it will be overwritten
-pub fn export2html(
-    posts: Vec<Post>,
-    download_files: bool,
-    download_thumbnails: bool,
-) -> Result<()> {
+pub fn export2html(posts: &[Post], config: &Config) -> Result<()> {
     if posts.is_empty() {
         anyhow::bail!("No posts to export");
     }
@@ -58,30 +54,25 @@ pub fn export2html(
 
     let posts_html: String = posts
         .iter()
-        .map(|p| render_post(p, download_files, download_thumbnails))
+        .map(|p| render_post(p, config.files, config.thumb))
         .collect::<Vec<String>>()
         .join("\n");
 
-    if download_files {
+    if config.files {
         download_assets(&posts, &format!("{}/files", dir), "files", |f| &f.url)?;
     }
-
-    if download_thumbnails {
+    if config.thumb {
         download_assets(&posts, &format!("{}/thumb", dir), "thumbnails", |f| &f.url_thumb)?;
     }
 
-    let template = std::fs::read_to_string("template.html")?
-        .replace("{{posts}}", &posts_html);
-    std::fs::write(format!("{}/index.html", dir), template)?;
+    const TEMPLATE: &'static str = include_str!("../template.html");
+    let index_html = TEMPLATE.replace("{{posts}}", &posts_html);
+    std::fs::write(format!("{}/index.html", dir), index_html)?;
 
     Ok(())
 }
 
-fn render_post(
-    post: &Post,
-    download_files: bool,
-    download_thumbnails: bool,
-) -> String {
+fn render_post(post: &Post, download_files: bool, download_thumbnails: bool) -> String {
     let mut html = format!("<div class=\"post\" id=\"post{}\">\n", post.id);
 
     html.push_str("  <div class=\"post-head\">\n");

@@ -28,7 +28,7 @@ fn scrape_thread(url: &str, config: &Config) -> Result<()> {
         .context("failed to parse thread HTML")?;
     println!(" Done ({} ms)", t.elapsed().as_millis());
 
-    export::export2html(posts, config.files, config.thumb)
+    export::export2html(&posts, &config)
         .context("failed to export thread")?;
 
     println!("Done processing {} ({} ms)", url, t_total.elapsed().as_millis());
