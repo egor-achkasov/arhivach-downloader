@@ -38,15 +38,6 @@ async fn scrape_thread(url: &str, config: &Config) -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .without_time()
-        .with_target(false)
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"))
-        )
-        .init();
-
     let config = parse_args()
         .unwrap_or_else(|e| {
             eprintln!("Error: {}", e);

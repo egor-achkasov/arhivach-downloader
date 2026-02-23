@@ -1,7 +1,6 @@
 use crate::file::File;
 
 use anyhow::{Context, Result};
-use tracing::debug;
 
 /// Represents a single post in a thread
 #[derive(Debug, Clone)]
@@ -36,7 +35,6 @@ impl Post {
             posts.push(post);
         }
 
-        debug!("Parsed {} posts", posts.len());
         Ok(posts)
     }
 

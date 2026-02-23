@@ -1,7 +1,6 @@
 use crate::post::Post;
 
 use anyhow::{Result, Context};
-use tracing::debug;
 
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -190,7 +189,6 @@ async fn download_assets(
             let url = url_of(f);
             let filename = url.split('/').last().unwrap_or("");
             let path = format!("{}/{}", dest_dir, filename);
-            debug!(url = %url, %path, "Downloading {}", label);
             let mut failed = false;
             for attempt in 0..3 {
                 match download(url, &path).await {
