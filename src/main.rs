@@ -7,8 +7,9 @@ use parse_args::{Config, parse_args};
 use post::Post;
 
 use anyhow::{Context, Ok, Result};
+use std::result::Result::Ok as StdOk;
 
-fn scrape_thread(url: &str, config: &Config) -> Result<()> {
+fn scrape_thread(url: &str, config: &Config) -> Result<Post> {
     use std::io::Write;
     let t_total = std::time::Instant::now();
 
@@ -28,11 +29,13 @@ fn scrape_thread(url: &str, config: &Config) -> Result<()> {
         .context("failed to parse thread HTML")?;
     println!(" Done ({} ms)", t.elapsed().as_millis());
 
+    let first_post = posts.first().context("thread has no posts")?.clone();
+
     export::export2html(&posts, &config)
         .context("failed to export thread")?;
 
     println!("Done processing {} ({} ms)", url, t_total.elapsed().as_millis());
-    Ok(())
+    Ok(first_post)
 }
 
 
@@ -43,11 +46,19 @@ fn main() -> Result<()> {
             std::process::exit(1);
         });
 
+    let mut first_posts: Vec<Post> = Vec::new();
+    let mut i = 1;
     for url in &config.urls {
-        println!("Processing {}:", url);
-        scrape_thread(url, &config)
-            .unwrap_or_else(|e| eprintln!("Error processing {}: {:#}", url, e));
+        println!("Processing {} ({} / {}):", url, i, config.urls.len());
+        i += 1;
+        match scrape_thread(url, &config) {
+            StdOk(first_post) => first_posts.push(first_post),
+            Err(e) => eprintln!("Error processing {}: {:#}", url, e),
+        }
     }
+
+    export::write_index_html(&first_posts, &config)
+        .context("failed to write main index.html")?;
 
     Ok(())
 }

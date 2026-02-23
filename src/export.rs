@@ -2,6 +2,8 @@ use crate::{parse_args::Config, post::Post};
 
 use anyhow::{Result, Context};
 
+const TEMPLATE: &'static str = include_str!("../template.html");
+
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
      .replace('<', "&lt;")
@@ -34,6 +36,38 @@ fn render_text_to_html(text: &str) -> String {
     }).collect();
 
     lines.join("<br>\n")
+}
+
+/// Write a top-level index.html with one entry per thread (first post + link to thread folder)
+pub fn write_index_html(first_posts: &[Post], config: &Config) -> Result<()> {
+    if first_posts.is_empty() {
+        return Ok(());
+    }
+
+    let posts_html: String = first_posts
+        .iter()
+        .map(|p| {
+            let mut post_html = render_post(p, config.files, config.thumb);
+            // render_post references thumbnails and images in the same directory,
+            // so replace them with links to the thread folder
+            config.files.then(|| post_html = post_html.replace(
+                "<a href=\"files/",
+                &format!("<a href=\"{}/files/", p.id),
+            ));
+            config.thumb.then(|| post_html = post_html.replace(
+                "<img src=\"thumb/",
+                &format!("<img src=\"{}/thumb/", p.id),
+            ));
+            format!("<div><a href=\"{}/index.html\">В тред &rarr;</a></div>{}\n", p.id, post_html)
+        })
+        .collect::<Vec<String>>()
+        .join("\n");
+
+    let index_html = TEMPLATE.replace("{{posts}}", &posts_html);
+    std::fs::write("index.html", index_html)
+        .context("failed to write index.html")?;
+
+    Ok(())
 }
 
 /// Export the thread to a simple static HTML
@@ -77,7 +111,6 @@ pub fn export2html(posts: &[Post], config: &Config) -> Result<()> {
         )?;
     }
 
-    const TEMPLATE: &'static str = include_str!("../template.html");
     let index_html = TEMPLATE.replace("{{posts}}", &posts_html);
     std::fs::write(format!("{}/index.html", dir), index_html)?;
 
