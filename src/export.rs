@@ -59,10 +59,22 @@ pub fn export2html(posts: &[Post], config: &Config) -> Result<()> {
         .join("\n");
 
     if config.files {
-        download_assets(&posts, &format!("{}/files", dir), "files", |f| &f.url)?;
+        download_assets(
+            &posts,
+            &format!("{}/files", dir),
+            "files",
+            |f| &f.url,
+            config.resume,
+        )?;
     }
     if config.thumb {
-        download_assets(&posts, &format!("{}/thumb", dir), "thumbnails", |f| &f.url_thumb)?;
+        download_assets(
+            &posts,
+            &format!("{}/thumb", dir),
+            "thumbnails",
+            |f| &f.url_thumb,
+            config.resume,
+        )?;
     }
 
     const TEMPLATE: &'static str = include_str!("../template.html");
@@ -167,6 +179,7 @@ fn download_assets(
     dest_dir: &str,
     label: &str,
     url_of: impl Fn(&crate::file::File) -> &str,
+    skip_if_exists: bool,
 ) -> Result<()> {
     use std::io::Write;
 
@@ -180,6 +193,9 @@ fn download_assets(
             let url = url_of(f);
             let filename = url.split('/').last().unwrap_or("");
             let path = format!("{}/{}", dest_dir, filename);
+            if skip_if_exists && std::path::Path::new(&path).exists() {
+                continue;
+            }
             let mut result = Err(anyhow::anyhow!("no attempts"));
             for _ in 0..3 {
                 result = download(url, &path);

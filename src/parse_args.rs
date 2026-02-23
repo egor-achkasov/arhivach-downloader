@@ -6,7 +6,8 @@ use std::path::PathBuf;
 pub struct Config{
     pub urls: Vec<String>,
     pub thumb: bool,
-    pub files: bool
+    pub files: bool,
+    pub resume: bool,
 }
 
 pub fn parse_args() -> Result<Config> {
@@ -27,6 +28,10 @@ pub fn parse_args() -> Result<Config> {
         /// Download files (images, videos, gifs, etc), default: false
         #[arg(short = 'f', long = "files", default_value_t = false)]
         files: bool,
+
+        /// Resume files and thumbnails downloading instead of overwriting. Useless if neither -t nor -f are set, default: false
+        #[arg(short = 'r', long = "resume", default_value_t = false)]
+        resume: bool
     }
     let cli = Cli::parse();
 
@@ -48,6 +53,7 @@ pub fn parse_args() -> Result<Config> {
     Ok(Config {
         urls,
         thumb: cli.thumb,
-        files: cli.files
+        files: cli.files,
+        resume: cli.resume,
     })
 }
