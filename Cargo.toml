@@ -1,6 +1,6 @@
 [package]
-name = "archivarch-downloader"
-description = "Download threads from arhivach, including media."
+name = "arhivarch-downloader"
+description = "Download threads from arhivach."
 version = "0.1.0"
 edition = "2024"
 
