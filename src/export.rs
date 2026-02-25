@@ -1,4 +1,6 @@
-use crate::{parse_args::Config, post::Post};
+use std::sync::mpsc::Sender;
+
+use crate::{config::Config, events::Event, post::Post};
 
 use anyhow::{Result, Context};
 
@@ -39,7 +41,7 @@ fn render_text_to_html(text: &str) -> String {
 }
 
 /// Write a top-level index.html with one entry per thread (first post + link to thread folder)
-pub fn write_index_html(first_posts: &[Post], config: &Config) -> Result<()> {
+pub(crate) fn write_index_html(first_posts: &[Post], config: &Config) -> Result<()> {
     if first_posts.is_empty() {
         return Ok(());
     }
@@ -78,7 +80,7 @@ pub fn write_index_html(first_posts: &[Post], config: &Config) -> Result<()> {
 /// If download_thumbnails is true, downloads thumbnails to ./{thread_id}/thumb
 ///
 /// WARNING: If the directory already exists, it will be overwritten
-pub fn export2html(posts: &[Post], config: &Config) -> Result<()> {
+pub(crate) fn export2html(posts: &[Post], config: &Config, tx: &Sender<Event>) -> Result<()> {
     if posts.is_empty() {
         anyhow::bail!("No posts to export");
     }
@@ -99,6 +101,7 @@ pub fn export2html(posts: &[Post], config: &Config) -> Result<()> {
             "files",
             |f| &f.url,
             config.resume,
+            tx,
         )?;
     }
     if config.thumb {
@@ -108,6 +111,7 @@ pub fn export2html(posts: &[Post], config: &Config) -> Result<()> {
             "thumbnails",
             |f| &f.url_thumb,
             config.resume,
+            tx,
         )?;
     }
 
@@ -213,38 +217,57 @@ fn download_assets(
     label: &str,
     url_of: impl Fn(&crate::file::File) -> &str,
     skip_if_exists: bool,
+    tx: &Sender<Event>,
 ) -> Result<()> {
-    use std::io::Write;
-
     std::fs::create_dir_all(dest_dir)
         .with_context(|| format!("Failed to create directory {}", dest_dir))?;
+
     let t = std::time::Instant::now();
-    print!("\tDownloading {}... post 0 / {}", label, posts.len());
-    std::io::stdout().flush().ok();
+    tx.send(Event::DownloadBatchStarted {
+        label: label.to_string(),
+        total_posts: posts.len(),
+    }).ok();
+
     for (i, post) in posts.iter().enumerate() {
         for f in &post.files {
             let url = url_of(f);
-            let filename = url.split('/').last().unwrap_or("");
+            let filename = url.split('/').last().unwrap_or("").to_string();
             let path = format!("{}/{}", dest_dir, filename);
             if skip_if_exists && std::path::Path::new(&path).exists() {
                 continue;
             }
             let mut result = Err(anyhow::anyhow!("no attempts"));
-            for _ in 0..3 {
+            for attempt in 1..=3u32 {
                 result = download(url, &path);
                 if result.is_ok() { break; }
                 let e = result.as_ref().unwrap_err();
-                println!("\r\tFailed to download {} {}: {}\n\t-> Waiting 3 seconds...", label, filename, e);
+                tx.send(Event::DownloadAssetFailed {
+                    label: label.to_string(),
+                    filename: filename.clone(),
+                    attempt,
+                    error: e.to_string(),
+                }).ok();
                 std::thread::sleep(std::time::Duration::from_secs(3));
             }
             if result.is_err() {
-                println!("\tSkipping {} {} after 3 failed attempts.", label, filename);
+                tx.send(Event::DownloadAssetSkipped {
+                    label: label.to_string(),
+                    filename: filename.clone(),
+                }).ok();
             }
         }
-        print!("\r\tDownloading {}... post {} / {}", label, i + 1, posts.len());
-        std::io::stdout().flush().ok();
+        tx.send(Event::DownloadBatchProgress {
+            label: label.to_string(),
+            done: i + 1,
+            total: posts.len(),
+        }).ok();
     }
-    println!(" Done ({} ms)", t.elapsed().as_millis());
+
+    tx.send(Event::DownloadBatchDone {
+        label: label.to_string(),
+        elapsed_ms: t.elapsed().as_millis(),
+    }).ok();
+
     Ok(())
 }
 

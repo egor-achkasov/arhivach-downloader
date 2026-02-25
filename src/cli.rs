@@ -3,12 +3,7 @@ use anyhow::Result;
 
 use std::path::PathBuf;
 
-pub struct Config{
-    pub urls: Vec<String>,
-    pub thumb: bool,
-    pub files: bool,
-    pub resume: bool,
-}
+use arhivarch_downloader::config::Config;
 
 pub fn parse_args() -> Result<Config> {
     #[derive(Parser)]
@@ -36,7 +31,7 @@ pub fn parse_args() -> Result<Config> {
     let cli = Cli::parse();
 
     let mut urls = Vec::new();
-    // [URL]    
+    // [URL]
     if let Some(url) = cli.url {
         urls.push(url);
     }
