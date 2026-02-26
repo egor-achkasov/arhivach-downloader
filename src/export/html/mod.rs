@@ -1,8 +1,55 @@
-use crate::{config::Config, events::{Event, Reporter}, http, post::{File, Post}, render};
-
+use crate::{config::Config, events::{Event, Reporter}, http, post::{File, Post}};
 use anyhow::{Result, Context};
+use super::Export;
 
-const TEMPLATE: &str = include_str!("../template.html");
+mod render;
+
+const TEMPLATE: &str = include_str!("../../../template.html");
+
+pub struct HtmlExporter;
+
+impl Export for HtmlExporter {
+    fn export(&self, posts: &[Post], config: &Config, reporter: &dyn Reporter) -> Result<()> {
+        if posts.is_empty() {
+            anyhow::bail!("No posts to export");
+        }
+
+        let dir = format!("{}", posts[0].id);
+        std::fs::create_dir_all(&dir)?;
+
+        let posts_html: String = posts
+            .iter()
+            .map(|p| render::render_post(p, config.files, config.thumb))
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        if config.files {
+            download_assets(
+                &posts,
+                &format!("{}/files", dir),
+                "files",
+                |f| &f.url,
+                config.resume,
+                reporter,
+            )?;
+        }
+        if config.thumb {
+            download_assets(
+                &posts,
+                &format!("{}/thumb", dir),
+                "thumbnails",
+                |f| &f.url_thumb,
+                config.resume,
+                reporter,
+            )?;
+        }
+
+        let index_html = TEMPLATE.replace("{{posts}}", &posts_html);
+        std::fs::write(format!("{}/index.html", dir), index_html)?;
+
+        Ok(())
+    }
+}
 
 /// Write a top-level index.html with one entry per thread (first post + link to thread folder)
 pub fn write_index_html(first_posts: &[Post], config: &Config) -> Result<()> {
@@ -14,8 +61,6 @@ pub fn write_index_html(first_posts: &[Post], config: &Config) -> Result<()> {
         .iter()
         .map(|p| {
             let mut post_html = render::render_post(p, config.files, config.thumb);
-            // render_post references thumbnails and images in the same directory,
-            // so replace them with links to the thread folder
             config.files.then(|| post_html = post_html.replace(
                 "<a href=\"files/",
                 &format!("<a href=\"{}/files/", p.id),
@@ -32,55 +77,6 @@ pub fn write_index_html(first_posts: &[Post], config: &Config) -> Result<()> {
     let index_html = TEMPLATE.replace("{{posts}}", &posts_html);
     std::fs::write("index.html", index_html)
         .context("failed to write index.html")?;
-
-    Ok(())
-}
-
-/// Export the thread to a simple static HTML
-///
-/// Creates a directory as follows:
-/// ./{thread_id}, where {thread_id} is OP ID
-/// If download_files is true, downloads files to ./{thread_id}/files
-/// If download_thumbnails is true, downloads thumbnails to ./{thread_id}/thumb
-///
-/// WARNING: If the directory already exists, it will be overwritten
-pub fn export2html(posts: &[Post], config: &Config, reporter: &dyn Reporter) -> Result<()> {
-    if posts.is_empty() {
-        anyhow::bail!("No posts to export");
-    }
-
-    let dir = format!("{}", posts[0].id);
-    std::fs::create_dir_all(&dir)?;
-
-    let posts_html: String = posts
-        .iter()
-        .map(|p| render::render_post(p, config.files, config.thumb))
-        .collect::<Vec<String>>()
-        .join("\n");
-
-    if config.files {
-        download_assets(
-            &posts,
-            &format!("{}/files", dir),
-            "files",
-            |f| &f.url,
-            config.resume,
-            reporter,
-        )?;
-    }
-    if config.thumb {
-        download_assets(
-            &posts,
-            &format!("{}/thumb", dir),
-            "thumbnails",
-            |f| &f.url_thumb,
-            config.resume,
-            reporter,
-        )?;
-    }
-
-    let index_html = TEMPLATE.replace("{{posts}}", &posts_html);
-    std::fs::write(format!("{}/index.html", dir), index_html)?;
 
     Ok(())
 }

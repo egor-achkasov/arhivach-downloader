@@ -1,4 +1,4 @@
-use arhivarch_downloader::{backend, events::Event, config::Config};
+use arhivarch_downloader::{backend, events::Event, config::Config, HtmlExporter};
 
 use clap::Parser;
 use anyhow::Result;
@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
 
     let handle = std::thread::spawn({
         let config = config.clone();
-        move || backend::run(&config, &tx)
+        move || backend::run(&config, &tx, &HtmlExporter)
     });
 
     for event in rx {

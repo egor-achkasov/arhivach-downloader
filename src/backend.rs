@@ -1,19 +1,19 @@
 use anyhow::{Context, Ok, Result};
 use std::result::Result::Ok as StdOk;
 
-use crate::{config::Config, events::{Event, Reporter}, export, http, post::Post};
+use crate::{config::Config, events::{Event, Reporter}, export::{Export, html}, http, post::Post};
 
-pub fn scrape_thread(url: &str, config: &Config, reporter: &dyn Reporter) -> Result<Post> {
+pub fn scrape_thread(url: &str, config: &Config, reporter: &dyn Reporter, exporter: &dyn Export) -> Result<Post> {
     let t_total = std::time::Instant::now();
 
     reporter.report(Event::FetchStarted { url: url.to_string() });
     let t = std::time::Instant::now();
-    let html = http::fetch_with_retry(url, 3, reporter)?;
+    let html_content = http::fetch_with_retry(url, 3, reporter)?;
     reporter.report(Event::FetchDone { elapsed_ms: t.elapsed().as_millis() });
 
     reporter.report(Event::ParseStarted);
     let t = std::time::Instant::now();
-    let posts = Post::parse_posts(&html).context("failed to parse thread HTML")?;
+    let posts = Post::parse_posts(&html_content).context("failed to parse thread HTML")?;
     reporter.report(Event::ParseDone {
         post_count: posts.len(),
         elapsed_ms: t.elapsed().as_millis(),
@@ -21,7 +21,7 @@ pub fn scrape_thread(url: &str, config: &Config, reporter: &dyn Reporter) -> Res
 
     let first_post = posts.first().context("thread has no posts")?.clone();
 
-    export::export2html(&posts, config, reporter).context("failed to export thread")?;
+    exporter.export(&posts, config, reporter).context("failed to export thread")?;
 
     reporter.report(Event::ThreadDone {
         url: url.to_string(),
@@ -31,7 +31,7 @@ pub fn scrape_thread(url: &str, config: &Config, reporter: &dyn Reporter) -> Res
     Ok(first_post)
 }
 
-pub fn run(config: &Config, reporter: &dyn Reporter) -> Result<()> {
+pub fn run(config: &Config, reporter: &dyn Reporter, exporter: &dyn Export) -> Result<()> {
     let total = config.urls.len();
     let mut first_posts: Vec<Post> = Vec::new();
 
@@ -42,7 +42,7 @@ pub fn run(config: &Config, reporter: &dyn Reporter) -> Result<()> {
             total,
         });
 
-        match scrape_thread(url, config, reporter) {
+        match scrape_thread(url, config, reporter, exporter) {
             StdOk(first_post) => first_posts.push(first_post),
             Err(e) => {
                 reporter.report(Event::ThreadFailed {
@@ -53,7 +53,7 @@ pub fn run(config: &Config, reporter: &dyn Reporter) -> Result<()> {
         }
     }
 
-    export::write_index_html(&first_posts, config).context("failed to write main index.html")?;
+    html::write_index_html(&first_posts, config).context("failed to write main index.html")?;
 
     Ok(())
 }
