@@ -4,6 +4,10 @@ description = "Download threads from arhivach."
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "arhivach-downloader-cli"
+path = "src/bin/cli/main.rs"
+
 [dependencies]
 anyhow = "1.0.102"
 clap = { version = "4.5.57", features = ["derive"] }

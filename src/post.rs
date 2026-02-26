@@ -1,6 +1,37 @@
-use crate::file::File;
-
 use anyhow::{Context, Result};
+
+const BASE_URL: &str = "https://arhivach.vc";
+
+#[derive(Debug, Clone)]
+pub struct File {
+    /// original name, "videolol.mp4"
+    pub name_orig: String,
+    /// timestampname, "17699100670710.mp4"
+    pub name_timestamp: String,
+    /// thumbnail url, "https://arhivach.vc/storage/t/aeaa7825f8d8ffe3f07f242a59b7761c.thumb"
+    pub url_thumb: String,
+    /// url, "https://i.arhivach.vc/storage/a/ea/aeaa7825f8d8ffe3f07f242a59b7761c.mp4"
+    pub url: String,
+}
+
+impl std::fmt::Display for File {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} [{}]\n  url:   {}\n  thumb: {}",
+            self.name_orig, self.name_timestamp, self.url, self.url_thumb
+        )
+    }
+}
+
+struct PostHead {
+    subject: Option<String>,
+    name: Option<String>,
+    mailto: Option<String>,
+    time: String,
+    num: String,
+    id: u32,
+}
 
 /// Represents a single post in a thread
 #[derive(Debug, Clone)]
@@ -59,7 +90,7 @@ impl Post {
             .select(&SEL_POST_HEAD)
             .next()
             .context("missing post_head")?;
-        let (subject, name, mailto, time, num, id) = Post::parse_post_head(post_head)?;
+        let head = Post::parse_post_head(post_head)?;
 
         let post_comment = node
             .select(&SEL_POST_IMAGE_BLOCK)
@@ -68,12 +99,12 @@ impl Post {
         let (files, text) = Post::parse_post_comment(post_comment)?;
 
         Ok(Post {
-            subject,
-            name,
-            mailto,
-            time,
-            num,
-            id,
+            subject: head.subject,
+            name: head.name,
+            mailto: head.mailto,
+            time: head.time,
+            num: head.num,
+            id: head.id,
             files,
             text,
         })
@@ -96,18 +127,7 @@ impl Post {
     ///     </span> &nbsp;
     /// </div>
     /// ```
-    fn parse_post_head(
-        post_head: scraper::ElementRef
-    ) -> Result<
-        (
-            Option<String>, // subject
-            Option<String>, // name
-            Option<String>, // mailto
-            String,         // time
-            String,         // num
-            u32             // id
-        )
-    > {
+    fn parse_post_head(post_head: scraper::ElementRef) -> Result<PostHead> {
         static SEL_SPAN_POST_ID_A_HREF: std::sync::LazyLock<scraper::Selector> = std::sync::LazyLock::new(
             || scraper::Selector::parse("span.post_id a[href]").unwrap()
         );
@@ -166,7 +186,7 @@ impl Post {
             .text()
             .collect::<String>();
 
-        Ok((subject, name, mailto, time, num, id))
+        Ok(PostHead { subject, name, mailto, time, num, id })
     }
 
     /// Parses the sapn post_comment element from a post element
@@ -248,7 +268,7 @@ impl Post {
         let url_thumb = if url_thumb.is_empty() {
             String::new()
         } else {
-            format!("https://arhivach.vc{}", url_thumb)
+            format!("{BASE_URL}{url_thumb}")
         };
 
         // url
@@ -262,7 +282,7 @@ impl Post {
         } else if url.is_empty() {
             String::new()
         } else {
-            format!("https://arhivach.vc{}", url)
+            format!("{BASE_URL}{url}")
         };
 
         File {

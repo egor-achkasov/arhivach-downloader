@@ -21,3 +21,25 @@ pub enum Event {
     DownloadAssetSkipped  { label: String, filename: String },
     DownloadBatchDone     { label: String, elapsed_ms: u128 },
 }
+
+use std::sync::mpsc;
+
+/// Sink for progress events emitted by the library.
+/// Implement this to connect the library to any frontend.
+pub trait Reporter: Send + Sync {
+    fn report(&self, event: Event);
+}
+
+/// Blanket impl: mpsc::Sender<Event> is already a valid Reporter.
+impl Reporter for mpsc::Sender<Event> {
+    fn report(&self, event: Event) {
+        self.send(event).ok();
+    }
+}
+
+/// No-op reporter — useful in tests or when progress output is not needed.
+pub struct NullReporter;
+
+impl Reporter for NullReporter {
+    fn report(&self, _event: Event) {}
+}
