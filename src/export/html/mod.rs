@@ -4,7 +4,7 @@ use super::Export;
 
 mod render;
 
-const TEMPLATE: &str = include_str!("../../../template.html");
+const TEMPLATE: &str = include_str!("template.html");
 
 pub struct HtmlExporter;
 
