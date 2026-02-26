@@ -1,4 +1,4 @@
-use crate::post::{File, Post};
+use crate::thread::{File, Post};
 
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -12,23 +12,37 @@ fn html_escape(s: &str) -> String {
 /// - Lines starting with `>` (not `>>digit`) → greentext span
 /// - `\n` → `<br>`
 pub fn render_text_to_html(text: &str) -> String {
-    static RE_REPLY: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"&gt;&gt;(\d+)").unwrap()
-    });
+    let needle = "&gt;&gt;";
 
     let lines: Vec<String> = text.split('\n').map(|line| {
         let escaped = html_escape(line);
-        // Greentext: starts with > but not >>digit
-        let processed = if escaped.starts_with("&gt;") && !escaped.starts_with("&gt;&gt;") {
-            format!("<span class=\"quote\">{}</span>", escaped)
+
+        // Replace >>id with reply link anchors
+        let mut processed = String::with_capacity(escaped.len());
+        let mut rest = escaped.as_str();
+        while let Some(pos) = rest.find(needle) {
+            processed.push_str(&rest[..pos]);
+            let after = &rest[pos + needle.len()..];
+            let digit_end = after.find(|c: char| !c.is_ascii_digit()).unwrap_or(after.len());
+            if digit_end > 0 {
+                let id = &after[..digit_end];
+                processed.push_str(&format!("<a href=\"#post{id}\" class=\"reply-link\">&gt;&gt;{id}</a>"));
+                rest = &after[digit_end..];
+            } else {
+                processed.push_str(needle);
+                rest = after;
+            }
+        }
+        processed.push_str(rest);
+
+        // Wrap in greentext span if line starts with > but not >>digit
+        let is_greentext = escaped.starts_with("&gt;")
+            && !escaped.strip_prefix(needle).is_some_and(|s| s.starts_with(|c: char| c.is_ascii_digit()));
+        if is_greentext {
+            format!("<span class=\"quote\">{processed}</span>")
         } else {
-            escaped
-        };
-        // Reply links: >>id
-        RE_REPLY.replace_all(&processed, |caps: &regex::Captures| {
-            let id = &caps[1];
-            format!("<a href=\"#post{}\" class=\"reply-link\">&gt;&gt;{}</a>", id, id)
-        }).into_owned()
+            processed
+        }
     }).collect();
 
     lines.join("<br>\n")
