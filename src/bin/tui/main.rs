@@ -229,6 +229,19 @@ fn is_bool_field(field: Field) -> bool {
     matches!(field, Field::Thumb | Field::Files | Field::Resume)
 }
 
+fn paste_into_field(app: &mut App, text: &str) {
+    match app.field() {
+        Field::Url => app.url.push_str(text),
+        Field::Dir => app.dir.push_str(text),
+        Field::Retries => {
+            for c in text.chars().filter(|c| c.is_ascii_digit()) {
+                app.retries.push(c);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn toggle_field(app: &mut App, field: Field) {
     match field {
         Field::Thumb => app.thumb = !app.thumb,
@@ -304,13 +317,25 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> anyhow::Result<()>
         app.poll();
         terminal.draw(|f| draw(f, app))?;
 
-        if event::poll(std::time::Duration::from_millis(100))? {
-            match event::read()? {
-                CEvent::Key(key) if key.kind == KeyEventKind::Press => {
+        if event::poll(std::time::Duration::from_millis(100)).unwrap_or(false) {
+            match event::read() {
+                Ok(CEvent::Key(key)) if key.kind == KeyEventKind::Press => {
                     if key.modifiers.contains(KeyModifiers::CONTROL)
                         && key.code == KeyCode::Char('c')
                     {
                         return Ok(());
+                    }
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && key.code == KeyCode::Char('v')
+                    {
+                        if matches!(app.state, AppState::Input) {
+                            if let Ok(mut cb) = arboard::Clipboard::new() {
+                                if let Ok(text) = cb.get_text() {
+                                    paste_into_field(app, &text);
+                                }
+                            }
+                        }
+                        continue;
                     }
                     match app.state {
                         AppState::Input => handle_input_key(app, key),
@@ -322,7 +347,7 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> anyhow::Result<()>
                         }
                     }
                 }
-                CEvent::Mouse(mouse) => {
+                Ok(CEvent::Mouse(mouse)) => {
                     if matches!(app.state, AppState::Input)
                         && matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
                     {
