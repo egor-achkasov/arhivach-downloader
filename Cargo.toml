@@ -4,6 +4,9 @@ description = "Download threads from arhivach."
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+path = "src/lib/lib.rs"
+
 [[bin]]
 name = "arhivach-downloader-cli"
 path = "src/bin/cli/main.rs"

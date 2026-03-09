@@ -1,6 +1,6 @@
-use anyhow::{Context, Result};
+use super::BASE_URL;
 
-const BASE_URL: &str = "https://arhivach.vc";
+use anyhow::{Context, Result};
 
 #[derive(Debug, Clone)]
 pub struct File {

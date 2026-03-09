@@ -1,54 +1,7 @@
-use crate::thread::{File, Post};
-
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-     .replace('<', "&lt;")
-     .replace('>', "&gt;")
-     .replace('"', "&quot;")
-}
-
-/// Converts plain post text to HTML.
-/// - `>>id` → reply link anchor
-/// - Lines starting with `>` (not `>>digit`) → greentext span
-/// - `\n` → `<br>`
-pub fn render_text_to_html(text: &str) -> String {
-    let needle = "&gt;&gt;";
-
-    let lines: Vec<String> = text.split('\n').map(|line| {
-        let escaped = html_escape(line);
-
-        // Replace >>id with reply link anchors
-        let mut processed = String::with_capacity(escaped.len());
-        let mut rest = escaped.as_str();
-        while let Some(pos) = rest.find(needle) {
-            processed.push_str(&rest[..pos]);
-            let after = &rest[pos + needle.len()..];
-            let digit_end = after.find(|c: char| !c.is_ascii_digit()).unwrap_or(after.len());
-            if digit_end > 0 {
-                let id = &after[..digit_end];
-                processed.push_str(&format!("<a href=\"#post{id}\" class=\"reply-link\">&gt;&gt;{id}</a>"));
-                rest = &after[digit_end..];
-            } else {
-                processed.push_str(needle);
-                rest = after;
-            }
-        }
-        processed.push_str(rest);
-
-        // Wrap in greentext span if line starts with > but not >>digit
-        let is_greentext = escaped.starts_with("&gt;")
-            && !escaped.strip_prefix(needle).is_some_and(|s| s.starts_with(|c: char| c.is_ascii_digit()));
-        if is_greentext {
-            format!("<span class=\"quote\">{processed}</span>")
-        } else {
-            processed
-        }
-    }).collect();
-
-    lines.join("<br>\n")
-}
+use crate::post::{File, Post};
 
 /// Renders a single post to an HTML fragment string.
+/// If download_files or download_thumbnails is true, the links will be converted to local paths
 pub fn render_post(post: &Post, download_files: bool, download_thumbnails: bool) -> String {
     let mut html = format!("<div class=\"post\" id=\"post{}\">\n", post.id);
 
@@ -98,6 +51,54 @@ pub fn render_post(post: &Post, download_files: bool, download_thumbnails: bool)
 
     html.push_str("</div>\n");
     html
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+     .replace('<', "&lt;")
+     .replace('>', "&gt;")
+     .replace('"', "&quot;")
+}
+
+/// Converts plain post text to HTML.
+/// - `>>id` → reply link anchor
+/// - Lines starting with `>` (not `>>digit`) → greentext span
+/// - `\n` → `<br>`
+fn render_text_to_html(text: &str) -> String {
+    let needle = "&gt;&gt;";
+
+    let lines: Vec<String> = text.split('\n').map(|line| {
+        let escaped = html_escape(line);
+
+        // Replace >>id with reply link anchors
+        let mut processed = String::with_capacity(escaped.len());
+        let mut rest = escaped.as_str();
+        while let Some(pos) = rest.find(needle) {
+            processed.push_str(&rest[..pos]);
+            let after = &rest[pos + needle.len()..];
+            let digit_end = after.find(|c: char| !c.is_ascii_digit()).unwrap_or(after.len());
+            if digit_end > 0 {
+                let id = &after[..digit_end];
+                processed.push_str(&format!("<a href=\"#post{id}\" class=\"reply-link\">&gt;&gt;{id}</a>"));
+                rest = &after[digit_end..];
+            } else {
+                processed.push_str(needle);
+                rest = after;
+            }
+        }
+        processed.push_str(rest);
+
+        // Wrap in greentext span if line starts with > but not >>digit
+        let is_greentext = escaped.starts_with("&gt;")
+            && !escaped.strip_prefix(needle).is_some_and(|s| s.starts_with(|c: char| c.is_ascii_digit()));
+        if is_greentext {
+            format!("<span class=\"quote\">{processed}</span>")
+        } else {
+            processed
+        }
+    }).collect();
+
+    lines.join("<br>\n")
 }
 
 fn render_images(

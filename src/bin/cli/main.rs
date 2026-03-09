@@ -1,41 +1,47 @@
-use arhivarch_downloader::{backend, events::Event, config::Config, HtmlExporter};
+use arhivarch_downloader::config::Config;
+use arhivarch_downloader::event::Event;
+use arhivarch_downloader::export::{html::HtmlExporter, ExporterKind};
 
-use clap::Parser;
-use anyhow::Result;
+use clap::{Parser, ValueEnum};
 
 use std::path::PathBuf;
-use std::sync::mpsc;
+
+#[derive(Clone, ValueEnum)]
+enum ExporterArg {
+    Html,
+}
+use std::sync::mpsc::channel;
 
 fn main() -> anyhow::Result<()> {
-    let config = parse_args().unwrap_or_else(|e| {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
-    });
-
-    let (tx, rx) = mpsc::channel::<Event>();
-
+    let config = parse_args();
+    let (tx, rx) = channel::<Event>();
     let handle = std::thread::spawn({
         let config = config.clone();
-        move || backend::run(&config, &tx, &HtmlExporter)
+        move || arhivarch_downloader::run(&config, tx)
     });
 
     for event in rx {
         render_event(&event);
     }
 
-    handle.join().unwrap()
+    let _ = handle.join().map_err(|e| anyhow::anyhow!("{:?}", e))?;
+    Ok(())
 }
 
-pub fn parse_args() -> Result<Config> {
+pub fn parse_args() -> Config {
     #[derive(Parser)]
     #[command(about, long_about)]
     struct Cli {
         /// URL to download
-        url: Option<String>,
+        url: String,
 
-        /// Path to a text file containing a list of URLs (one per line)
-        #[arg(short = 'l', long = "list")]
-        list: Option<PathBuf>,
+        /// Path to download directory
+        #[arg(short = 'd', long = "dir", value_name = "DIR", default_value = ".", value_hint = clap::ValueHint::DirPath)]
+        dir: PathBuf,
+
+        /// Exporter
+        #[arg(short = 'e', long = "exporter", value_name = "EXPORTER", default_value = "html")]
+        exporter: ExporterArg,
 
         /// Download thumbnail images, default: false
         #[arg(short = 't', long = "thumb", default_value_t = false)]
@@ -47,85 +53,78 @@ pub fn parse_args() -> Result<Config> {
 
         /// Resume files and thumbnails downloading instead of overwriting. Useless if neither -t nor -f are set, default: false
         #[arg(short = 'r', long = "resume", default_value_t = false)]
-        resume: bool
+        resume: bool,
+
+        /// Download retries in case of a error
+        #[arg(short = 'R', long = "retries", default_value_t = 3)]
+        download_retries: u32,
     }
     let cli = Cli::parse();
 
-    let mut urls = Vec::new();
-    // [URL]
-    if let Some(url) = cli.url {
-        urls.push(url);
-    }
-    // [List]
-    if let Some(list) = cli.list {
-        for line in std::fs::read_to_string(list)?.lines() {
-            urls.push(line.to_string());
-        }
-    }
-    if urls.is_empty() {
-        anyhow::bail!("No URLs provided");
-    }
-
-    Ok(Config {
-        urls,
+    Config {
+        url: cli.url,
+        dir: cli.dir,
+        exporter: match cli.exporter {
+            ExporterArg::Html => ExporterKind::Html(HtmlExporter),
+        },
         thumb: cli.thumb,
         files: cli.files,
         resume: cli.resume,
-    })
+        download_retries: cli.download_retries,
+    }
 }
 
 fn render_event(event: &Event) {
     use std::io::Write;
     match event {
-        Event::ThreadStarted { url, index, total } =>
-            println!("Processing {} ({} / {}):", url, index, total),
-
-        Event::ThreadDone { url, elapsed_ms } =>
-            println!("Done processing {} ({} ms)", url, elapsed_ms),
-
-        Event::ThreadFailed { url, error } =>
-            eprintln!("Error processing {}: {}", url, error),
-
-        Event::FetchStarted { .. } => {
-            print!("\tGetting thread...");
+        Event::GetStarted => {
+            print!("Fetching thread...");
             std::io::stdout().flush().ok();
         }
+        Event::GetDone =>
+            println!(" Done."),
+        Event::GetFailed { error } =>
+            eprintln!("\nFailed to fetch thread: {}", error),
 
-        Event::FetchDone { elapsed_ms } =>
-            println!(" Done ({} ms)", elapsed_ms),
+        Event::DownloadAllStarted =>
+            println!("Downloading stuff..."),
+        Event::DownloadAllDone =>
+            println!("All downloads complete."),
+        Event::DownloadAllFailed { error } =>
+            eprintln!("Download failed: {}", error),
 
-        Event::FetchRetrying { url, attempt, max_attempts, error } => {
-            eprintln!("\n\tHTTP request failed for {}: {}", url, error);
-            if attempt < max_attempts {
-                eprintln!("\tWaiting 3 seconds...");
-            }
-        }
-
-        Event::ParseStarted => {
-            print!("\tParsing posts...");
+        Event::DownloadStarted { index, max_index } => {
+            print!("\r\tDownloading {} / {}...", index, max_index);
             std::io::stdout().flush().ok();
         }
-
-        Event::ParseDone { elapsed_ms, .. } =>
-            println!(" Done ({} ms)", elapsed_ms),
-
-        Event::DownloadBatchStarted { label, total_posts } => {
-            print!("\tDownloading {}... post 0 / {}", label, total_posts);
+        Event::DownloadDone { index, max_index } => {
+            println!("\r\tDownloading {} / {}... Done.", index, max_index);
+        }
+        Event::DownloadFailed { url, error } =>
+            eprintln!("\r\tFailed to download {}: {}", url, error),
+        Event::DownloadSkipped { index, max_index } =>
+            println!("\r\tDownloading {} / {}... Skipped.", index, max_index),
+        
+        Event::DownloadFilesStarted => {
+            println!("Downloading files...");
             std::io::stdout().flush().ok();
         }
-
-        Event::DownloadBatchProgress { label, done, total } => {
-            print!("\r\tDownloading {}... post {} / {}", label, done, total);
+        Event::DownloadFilesDone =>
+            println!("Done."),
+        Event::DownloadThumbStarted => {
+            println!("Downloading thumbnails...");
             std::io::stdout().flush().ok();
         }
+        Event::DownloadThumbDone =>
+            println!("Done."),
 
-        Event::DownloadAssetFailed { label, filename, error, .. } =>
-            println!("\r\tFailed to download {} {}: {}\n\t-> Waiting 3 seconds...", label, filename, error),
-
-        Event::DownloadAssetSkipped { label, filename } =>
-            println!("\tSkipping {} {} after 3 failed attempts.", label, filename),
-
-        Event::DownloadBatchDone { elapsed_ms, .. } =>
-            println!(" Done ({} ms)", elapsed_ms),
+        Event::ExportStarted => {
+            print!("Exporting...");
+            std::io::stdout().flush().ok();
+        }
+        Event::ExportDone =>
+            println!(" Done."),
+        Event::ExportFailed { error } =>
+            eprintln!("\nExport failed: {}", error),
     }
 }

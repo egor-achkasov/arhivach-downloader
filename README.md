@@ -9,28 +9,28 @@ Download threads from arhivach.vc and save them locally for offline access or pr
 `arhivach-downloader --help`:
 
 ```
-Download threads from arhivach.
-
-Usage: arhivarch-downloader.exe [OPTIONS] [URL]
+Usage: arhivarch-downloader-cli.exe [OPTIONS] <URL>
 
 Arguments:
-  [URL]  URL to download
+  <URL>  URL to download
 
 Options:
-  -l, --list <LIST>  Path to a text file containing a list of URLs (one per line)
-  -t, --thumb        Download thumbnail images, default: false
-  -f, --files        Download files (images, videos, gifs, etc), default: false
-  -r, --resume       Resume files and thumbnails downloading instead of overwriting. Useless if neither -t nor -f are set, default: false
-  -h, --help         Print help
+  -d, --dir <DIR>            Path to download directory [default: .]
+  -e, --exporter <EXPORTER>  Exporter [default: html] [possible values: html]
+  -t, --thumb                Download thumbnail images, default: false
+  -f, --files                Download files (images, videos, gifs, etc), default: false
+  -r, --resume               Resume files and thumbnails downloading instead of overwriting. Useless if neither -t nor -f are set, default: false
+  -R, --retries <RETRIES>    Download retries in case of a error [default: 3]
+  -h, --help                 Print help
 ```
 
-Each thread will be downloaded in a directory named by an OP №. Contents:
-- index.html -- the thread. Open it with your web browser.
-- files directory (if -f (--files) argument is given) -- all the files original attached to posts. Might be heavy if there are many videos.
-- thumb directory (if -t (--thumb) argument is given) -- all the thumbnails needed to render file previews in the thread.
+Creates a subdirectory named after the arhivach thread id (the number after `/thread/` in the URL) inside the download directory, and saves the thread there. Contents:
+- `index.html` — the thread. Open it with your web browser.
+- `files/` (if `-f`/`--files` is given) — original files attached to posts. May be large if there are many videos.
+- `thumb/` (if `-t`/`--thumb` is given) — thumbnails needed to render file previews in the thread.
 
-Main index.html will be created in the current directory to feature the first posts of the downloaded threads.
+Use `-r`/`--resume` to skip files and thumbnails that are already downloaded.
 
-Note that you may pass an URL directly as an argument, pass a path to a text file with URLs via -f, or both.
+Use `-d`/`--dir` to specify where to create the thread directory (defaults to the current directory).
 
-Use -r (--resume) to skip downloading files and thumbnails that are already there.
+Use `-R`/`--retries` to control how many times a failed download is retried (default: 3).
