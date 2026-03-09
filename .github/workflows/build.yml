@@ -2,10 +2,34 @@ name: Build Windows Executables
 
 on:
   push:
-    branches: [master]
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: rust:alpine
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: apk add --no-cache musl-dev
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: alpine-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: alpine-cargo-
+
+      - name: Cargo check
+        run: cargo check --all-targets
+
   build:
+    needs: check
+    if: github.ref == 'refs/heads/master'
     runs-on: windows-latest
 
     steps:
@@ -43,3 +67,59 @@ jobs:
         with:
           name: arhivach-downloader-tui
           path: target/release/arhivach-downloader-tui.exe
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download CLI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: arhivach-downloader-cli
+          path: artifacts/
+
+      - name: Download TUI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: arhivach-downloader-tui
+          path: artifacts/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | head -n 1)
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" | head -20)
+          else
+            CHANGELOG=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s (%h)")
+          fi
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create release tag
+        id: tag
+        run: |
+          TAG="release-$(date +'%Y%m%d%H%M%S')"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.TAG }}
+          name: Release ${{ steps.tag.outputs.TAG }}
+          body: |
+            ## Changes
+            ${{ steps.changelog.outputs.CHANGELOG }}
+          files: |
+            artifacts/arhivach-downloader-cli.exe
+            artifacts/arhivach-downloader-tui.exe
