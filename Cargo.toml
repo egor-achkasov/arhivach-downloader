@@ -11,8 +11,13 @@ path = "src/lib/lib.rs"
 name = "arhivach-downloader-cli"
 path = "src/bin/cli/main.rs"
 
+[[bin]]
+name = "arhivach-downloader-tui"
+path = "src/bin/tui/main.rs"
+
 [dependencies]
 anyhow = "1.0.102"
 clap = { version = "4.5.57", features = ["derive"] }
+ratatui = "0.29"
 reqwest = { version = "0.12", features = ["blocking"] }
 scraper = "0.25.0"
