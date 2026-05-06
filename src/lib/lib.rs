@@ -1,14 +1,14 @@
 pub mod config;
+pub mod error;
 pub mod event;
 pub mod export;
 
 mod download;
 mod post;
 
+use crate::error::{Error, Result};
 use crate::post::{Post, File};
 use crate::export::Exporter;
-
-use anyhow::{Result, Context};
 
 use std::sync::mpsc::Sender;
 
@@ -18,23 +18,19 @@ pub fn run(config: &config::Config, tx: Sender<event::Event>) -> Result<()> {
     tx.send(event::Event::GetStarted)?;
     let html = download::download(&config.url, config.download_retries)?
         .body_mut()
-        .read_to_string()
-        .context("failed to read response body")?;
+        .read_to_string()?;
     let posts = Post::parse_posts(&html)
-        .inspect_err(|e| { let _ = tx.send(event::Event::GetFailed { error: format!("{:#}", e) }); })
-        .context("failed to parse posts")?;
+        .inspect_err(|e| { let _ = tx.send(event::Event::GetFailed { error: e.to_string() }); })?;
     tx.send(event::Event::GetDone)?;
 
     tx.send(event::Event::DownloadAllStarted)?;
     run_download(&posts, &config, tx.clone())
-        .inspect_err(|e| { let _ = tx.send(event::Event::DownloadAllFailed { error: format!("{:#}", e) }); })
-        .context("failed to download files")?;
+        .inspect_err(|e| { let _ = tx.send(event::Event::DownloadAllFailed { error: e.to_string() }); })?;
     tx.send(event::Event::DownloadAllDone)?;
 
     tx.send(event::Event::ExportStarted)?;
     config.exporter.export(&posts, config)
-        .inspect_err(|e| { let _ = tx.send(event::Event::ExportFailed { error: format!("{:#}", e) }); })
-        .context("failed to export")?;
+        .inspect_err(|e| { let _ = tx.send(event::Event::ExportFailed { error: e.to_string() }); })?;
     tx.send(event::Event::ExportDone)?;
 
     Ok(())
@@ -48,7 +44,9 @@ fn run_download(posts: &[Post], config: &config::Config, tx: Sender<event::Event
         let result = download::download(url, config.download_retries)?;
         let mut bytes = Vec::new();
         std::io::Read::read_to_end(&mut result.into_body().as_reader(), &mut bytes)?;
-        anyhow::ensure!(!bytes.is_empty(), "empty file: {}", url);
+        if bytes.is_empty() {
+            return Err(Error::EmptyFile(url.to_string()));
+        }
         std::fs::write(filepath, bytes)?;
         Ok(())
     };
@@ -76,7 +74,7 @@ fn run_download(posts: &[Post], config: &config::Config, tx: Sender<event::Event
                 Ok(()) => tx.send(event::Event::DownloadDone{ index, max_index })?,
                 Err(e) => tx.send(event::Event::DownloadFailed {
                     url: url.to_string(),
-                    error: format!("{:#}", e)
+                    error: e.to_string()
                 })?
             };
             index += 1;

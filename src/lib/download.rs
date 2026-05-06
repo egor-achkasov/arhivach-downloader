@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use crate::error::{Error, Result};
 
 /// Downloads a URL, retrying up to `tries` times.
 ///
@@ -14,11 +14,11 @@ pub fn download(url: &str, tries: u32) -> Result<ureq::http::Response<ureq::Body
         match CLIENT.get(url).call() {
             Ok(response) => return Ok(response),
             Err(ureq::Error::StatusCode(code)) if code >= 400 && code < 500 => {
-                return Err(anyhow!("client error: {}", code));
+                return Err(Error::HttpClientError(code));
             }
             Err(ureq::Error::StatusCode(_)) => continue,
             Err(e) => return Err(e.into()),
         }
     }
-    Err(anyhow!("failed to download {} after {} tries", url, tries))
+    Err(Error::DownloadFailed { url: url.to_string(), tries })
 }

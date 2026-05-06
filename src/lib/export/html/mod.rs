@@ -1,5 +1,4 @@
-use crate::{config::Config, post::Post};
-use anyhow::Result;
+use crate::{config::Config, error::{Error, Result}, post::Post};
 use super::Exporter;
 
 mod render;
@@ -11,7 +10,9 @@ pub struct HtmlExporter;
 
 impl Exporter for HtmlExporter {
     fn export(&self, posts: &[Post], config: &Config) -> Result<()> {
-        anyhow::ensure!(!posts.is_empty(), "No posts to export");
+        if posts.is_empty() {
+            return Err(Error::NoPosts);
+        }
 
         std::fs::create_dir_all(&config.dir)?;
         let posts_html = posts

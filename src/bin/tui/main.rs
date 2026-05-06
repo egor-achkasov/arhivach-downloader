@@ -305,14 +305,14 @@ fn handle_mouse_click(app: &mut App, col: u16, row: u16) {
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
 
-fn run_app(terminal: &mut DefaultTerminal, app: &mut App) -> anyhow::Result<()> {
+fn run_app(terminal: &mut DefaultTerminal, app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     execute!(stdout(), EnableMouseCapture)?;
     let result = run_loop(terminal, app);
     execute!(stdout(), DisableMouseCapture)?;
     result
 }
 
-fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> anyhow::Result<()> {
+fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         app.poll();
         terminal.draw(|f| draw(f, app))?;
@@ -360,9 +360,12 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> anyhow::Result<()>
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     let mut terminal = ratatui::init();
     let result = run_app(&mut terminal, &mut App::new());
     ratatui::restore();
-    result
+    if let Err(e) = result {
+        eprintln!("ERROR: {e}");
+        std::process::exit(1);
+    }
 }

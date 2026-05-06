@@ -1,8 +1,7 @@
 pub mod html;
 
 use super::{config::Config, post::Post};
-
-use anyhow::Result;
+use crate::error::{Error, Result};
 
 use std::str::FromStr;
 
@@ -24,12 +23,12 @@ impl Exporter for ExporterKind {
 }
 
 impl FromStr for ExporterKind {
-    type Err = anyhow::Error;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<ExporterKind> {
         match s.to_lowercase().as_str() {
             "html" => Ok(ExporterKind::Html(html::HtmlExporter {})),
-            _ => anyhow::bail!("unknown exporter: {}", s),
+            _ => Err(Error::UnknownExporter(s.to_string())),
         }
     }
 }

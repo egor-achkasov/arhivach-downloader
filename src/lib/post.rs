@@ -1,6 +1,5 @@
 use super::BASE_URL;
-
-use anyhow::{Context, Result};
+use crate::error::{Error, Result};
 
 #[derive(Debug, Clone)]
 pub struct File {
@@ -58,7 +57,7 @@ impl Post {
         html: &str,
     ) -> Result<Vec<Post>> {
         let mut posts = Vec::new();
-        
+
         let document = scraper::Html::parse_document(html);
         let selector = scraper::Selector::parse(r#"div.post"#).unwrap();
         for node in document.select(&selector) {
@@ -70,7 +69,7 @@ impl Post {
     }
 
     /// Parse div class="post"
-    /// 
+    ///
     /// Example element:
     /// ```html
     /// <div class="post" id="post329274763" postid="329274763">
@@ -89,13 +88,13 @@ impl Post {
         let post_head = node
             .select(&SEL_POST_HEAD)
             .next()
-            .context("missing post_head")?;
+            .ok_or(Error::MissingElement("post_head"))?;
         let head = Post::parse_post_head(post_head)?;
 
         let post_comment = node
             .select(&SEL_POST_IMAGE_BLOCK)
             .next()
-            .context("missing post_comment")?;
+            .ok_or(Error::MissingElement("post_comment"))?;
         let (files, text) = Post::parse_post_comment(post_comment)?;
 
         Ok(Post {
@@ -114,7 +113,7 @@ impl Post {
     ///
     /// Returns (subject, name, mailto, time, num, id)
     /// Returns error if no time, num or id is found or if id is not a number
-    /// 
+    ///
     /// Example element:
     /// ```html
     /// <div class="post_head">
@@ -152,7 +151,7 @@ impl Post {
             .next()
             .and_then(|el| el.value().attr("href"))
             .and_then(|href| href.strip_prefix('#'))
-            .context("missing post id")?
+            .ok_or(Error::MissingElement("post id"))?
             .parse()?;
 
         let subject = post_head
@@ -175,14 +174,14 @@ impl Post {
         let time = post_head
             .select(&SEL_SPAN_POST_TIME)
             .next()
-            .context("missing post_time")?
+            .ok_or(Error::MissingElement("post_time"))?
             .text()
             .collect::<String>();
 
         let num = post_head
             .select(&SEL_SPAN_POST_NUM)
             .next()
-            .context("missing post_num")?
+            .ok_or(Error::MissingElement("post_num"))?
             .text()
             .collect::<String>();
 
@@ -190,9 +189,9 @@ impl Post {
     }
 
     /// Parses the sapn post_comment element from a post element
-    /// 
+    ///
     /// Returns (files, text)
-    /// 
+    ///
     /// Example element:
     /// <span class="post_comment">
     ///     <div class="post_image_block" ...>...</div> (see parse_post_image_block function) (can appear 0 to multiple times)
@@ -216,13 +215,13 @@ impl Post {
         let text = Post::parse_post_comment_body(node
             .select(&SEL_POST_COMMENT_BODY)
             .next()
-            .context("missing post_comment_body")?);
+            .ok_or(Error::MissingElement("post_comment_body"))?);
         Ok((files, text))
     }
 
     /// Parses "post_image_block" element
     /// Returns File
-    /// 
+    ///
     /// Example element:
     /// ```html
     /// <div class="post_image_block" id="pib_77_2" pib="77_2" title="537.4 Кб, 946 x 946
@@ -299,7 +298,7 @@ impl Post {
     /// - References are plaintext (e.g. >>329274789)
     /// - `<br>` is replaced with \n
     /// - `<span class="unkfunc">` (greentext) is replaced with >text
-    /// 
+    ///
     /// If the text contains a reference (e.g. >>329274789) it looks like this in the element:
     /// ```html
     /// <div class="post_comment_body">
@@ -310,7 +309,7 @@ impl Post {
     ///     text1
     /// </div>
     /// ```
-    /// 
+    ///
     /// This example returns:
     /// ```text
     /// >>329274893
@@ -342,20 +341,20 @@ impl std::fmt::Display for Post {
         // Header line
         let name = self.name.as_deref().unwrap_or("Аноним");
         let mailto = self.mailto.as_deref().unwrap_or("");
-        
+
         if !mailto.is_empty() {
             write!(f, "{} ({})", name, mailto)?;
         } else {
             write!(f, "{}", name)?;
         }
-        
+
         write!(f, " {} {} ID:{}", self.time, self.num, self.id)?;
-        
+
         // Subject
         if let Some(ref subject) = self.subject {
             write!(f, "\n{}", subject)?;
         }
-        
+
         // Files
         if !self.files.is_empty() {
             write!(f, "\n[Files: {}]", self.files.len())?;
@@ -363,12 +362,12 @@ impl std::fmt::Display for Post {
                 write!(f, "\n  - {}", file)?;
             }
         }
-        
+
         // Post text
         if !self.text.is_empty() {
             write!(f, "\n{}", self.text)?;
         }
-        
+
         Ok(())
     }
 }

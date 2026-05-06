@@ -12,7 +12,7 @@ enum ExporterArg {
 }
 use std::sync::mpsc::channel;
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     let config = parse_args();
     let (tx, rx) = channel::<Event>();
     let handle = std::thread::spawn({
@@ -24,8 +24,10 @@ fn main() -> anyhow::Result<()> {
         render_event(&event);
     }
 
-    let _ = handle.join().map_err(|e| anyhow::anyhow!("{:?}", e))?;
-    Ok(())
+    handle.join().map_err(|e| {
+        eprintln!("ERROR: {:?}", e);
+        std::process::exit(1);
+    }).ok();
 }
 
 pub fn parse_args() -> Config {
@@ -104,7 +106,7 @@ fn render_event(event: &Event) {
             eprintln!("\r\tFailed to download {}: {}", url, error),
         Event::DownloadSkipped { index, max_index } =>
             println!("\r\tDownloading {} / {}... Skipped.", index, max_index),
-        
+
         Event::DownloadFilesStarted => {
             println!("Downloading files...");
             std::io::stdout().flush().ok();
