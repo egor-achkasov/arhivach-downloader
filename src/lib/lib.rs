@@ -16,7 +16,10 @@ pub const BASE_URL: &str = "https://arhivach.vc";
 
 pub fn run(config: &config::Config, tx: Sender<event::Event>) -> Result<()> {
     tx.send(event::Event::GetStarted)?;
-    let html = download::download(&config.url, config.download_retries)?.text()?;
+    let html = download::download(&config.url, config.download_retries)?
+        .body_mut()
+        .read_to_string()
+        .context("failed to read response body")?;
     let posts = Post::parse_posts(&html)
         .inspect_err(|e| { let _ = tx.send(event::Event::GetFailed { error: format!("{:#}", e) }); })
         .context("failed to parse posts")?;
@@ -43,8 +46,8 @@ fn run_download(posts: &[Post], config: &config::Config, tx: Sender<event::Event
 
     let download_item = |url: &str, filepath: &std::path::PathBuf| -> Result<()> {
         let result = download::download(url, config.download_retries)?;
-        anyhow::ensure!(result.status().is_success(), "failed to download {}: {}", url, result.status());
-        let bytes = result.bytes()?;
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut result.into_body().as_reader(), &mut bytes)?;
         anyhow::ensure!(!bytes.is_empty(), "empty file: {}", url);
         std::fs::write(filepath, bytes)?;
         Ok(())
