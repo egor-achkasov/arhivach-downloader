@@ -2,15 +2,24 @@ use arhivarch_downloader::config::Config;
 use arhivarch_downloader::event::Event;
 use arhivarch_downloader::export::{html::HtmlExporter, ExporterKind};
 
-use clap::{Parser, ValueEnum};
-
 use std::path::PathBuf;
-
-#[derive(Clone, ValueEnum)]
-enum ExporterArg {
-    Html,
-}
 use std::sync::mpsc::channel;
+
+static HELP: &str = "Download threads from arhivach.
+
+Usage: arhivach-downloader-cli.exe [OPTIONS] <URL>
+
+Arguments:
+  <URL>  URL to download
+
+Options:
+  -d, --dir <DIR>                   Path to download directory [default: .]
+  -e, --exporter <EXPORTER>         Exporter [default: html] [possible values: html]
+  -t, --thumb                       Download thumbnail images, default: false
+  -f, --files                       Download files (images, videos, gifs, etc), default: false
+  -r, --resume                      Resume files and thumbnails downloading instead of overwriting. Useless if neither -t nor -f are set, default: false
+  -R, --retries <DOWNLOAD_RETRIES>  Download retries in case of a error [default: 3]
+  -h, --help                        Print help";
 
 fn main() {
     let config = parse_args();
@@ -31,49 +40,75 @@ fn main() {
 }
 
 pub fn parse_args() -> Config {
-    #[derive(Parser)]
-    #[command(about, long_about)]
-    struct Cli {
-        /// URL to download
-        url: String,
+    let mut args = std::env::args().skip(1).peekable();
 
-        /// Path to download directory
-        #[arg(short = 'd', long = "dir", value_name = "DIR", default_value = ".", value_hint = clap::ValueHint::DirPath)]
-        dir: PathBuf,
+    let mut url: Option<String> = None;
+    let mut dir = PathBuf::from(".");
+    let mut exporter = ExporterKind::Html(HtmlExporter);
+    let mut thumb = false;
+    let mut files = false;
+    let mut resume = false;
+    let mut download_retries: u32 = 3;
 
-        /// Exporter
-        #[arg(short = 'e', long = "exporter", value_name = "EXPORTER", default_value = "html")]
-        exporter: ExporterArg,
-
-        /// Download thumbnail images, default: false
-        #[arg(short = 't', long = "thumb", default_value_t = false)]
-        thumb: bool,
-
-        /// Download files (images, videos, gifs, etc), default: false
-        #[arg(short = 'f', long = "files", default_value_t = false)]
-        files: bool,
-
-        /// Resume files and thumbnails downloading instead of overwriting. Useless if neither -t nor -f are set, default: false
-        #[arg(short = 'r', long = "resume", default_value_t = false)]
-        resume: bool,
-
-        /// Download retries in case of a error
-        #[arg(short = 'R', long = "retries", default_value_t = 3)]
-        download_retries: u32,
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "-h" | "--help" => {
+                println!("{}", HELP);
+                std::process::exit(0);
+            }
+            "-t" | "--thumb" => thumb = true,
+            "-f" | "--files" => files = true,
+            "-r" | "--resume" => resume = true,
+            "-d" | "--dir" => {
+                let val = args.next().unwrap_or_else(|| {
+                    eprintln!("ERROR: {} requires a value", arg);
+                    std::process::exit(1);
+                });
+                dir = PathBuf::from(val);
+            }
+            "-e" | "--exporter" => {
+                let val = args.next().unwrap_or_else(|| {
+                    eprintln!("ERROR: {} requires a value", arg);
+                    std::process::exit(1);
+                });
+                exporter = match val.as_str() {
+                    "html" => ExporterKind::Html(HtmlExporter),
+                    other => {
+                        eprintln!("ERROR: unknown exporter '{}'. Possible values: html", other);
+                        std::process::exit(1);
+                    }
+                };
+            }
+            "-R" | "--retries" => {
+                let val = args.next().unwrap_or_else(|| {
+                    eprintln!("ERROR: {} requires a value", arg);
+                    std::process::exit(1);
+                });
+                download_retries = val.parse().unwrap_or_else(|_| {
+                    eprintln!("ERROR: --retries must be a non-negative integer");
+                    std::process::exit(1);
+                });
+            }
+            _ if arg.starts_with('-') => {
+                eprintln!("ERROR: unknown option '{}'. Run with --help for usage.", arg);
+                std::process::exit(1);
+            }
+            _ => {
+                if url.is_some() {
+                    eprintln!("ERROR: unexpected argument '{}'. Run with --help for usage.", arg);
+                    std::process::exit(1);
+                }
+                url = Some(arg);
+            }
+        }
     }
-    let cli = Cli::parse();
 
-    Config {
-        url: cli.url,
-        dir: cli.dir,
-        exporter: match cli.exporter {
-            ExporterArg::Html => ExporterKind::Html(HtmlExporter),
-        },
-        thumb: cli.thumb,
-        files: cli.files,
-        resume: cli.resume,
-        download_retries: cli.download_retries,
-    }
+    let url = url.unwrap_or_else(|| {
+        eprintln!("ERROR: missing required argument <URL>. Run with --help for usage.");
+        std::process::exit(1);
+    });
+
+    Config { url, dir, exporter, thumb, files, resume, download_retries }
 }
 
 fn render_event(event: &Event) {

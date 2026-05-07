@@ -21,7 +21,6 @@ path = "src/bin/tui/main.rs"
 
 [dependencies]
 arboard = "3"
-clap = { version = "4.5.57", features = ["derive"] }
 ratatui = "0.29"
 scraper = "0.25.0"
 ureq = "3.3.0"
