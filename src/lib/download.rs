@@ -17,6 +17,7 @@ pub fn download(url: &str, tries: u32) -> Result<ureq::http::Response<ureq::Body
                 return Err(Error::HttpClientError(code));
             }
             Err(ureq::Error::StatusCode(_)) => continue,
+            Err(ureq::Error::Io(_)) => continue,
             Err(e) => return Err(e.into()),
         }
     }
