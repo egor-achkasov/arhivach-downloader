@@ -17,8 +17,7 @@ Options:
   -e, --exporter <EXPORTER>         Exporter [default: html] [possible values: html]
   -t, --thumb                       Download thumbnail images, default: false
   -f, --files                       Download files (images, videos, gifs, etc), default: false
-  -r, --resume                      Resume files and thumbnails downloading instead of overwriting. Useless if neither -t nor -f are set, default: false
-  -R, --retries <DOWNLOAD_RETRIES>  Download retries in case of a error [default: 3]
+  -r, --retries <DOWNLOAD_RETRIES>  Download retries in case of a error [default: 3]
   -h, --help                        Print help";
 
 fn main() {
@@ -47,7 +46,6 @@ pub fn parse_args() -> Config {
     let mut exporter = ExporterKind::Html(HtmlExporter);
     let mut thumb = false;
     let mut files = false;
-    let mut resume = false;
     let mut download_retries: u32 = 3;
 
     while let Some(arg) = args.next() {
@@ -58,7 +56,6 @@ pub fn parse_args() -> Config {
             }
             "-t" | "--thumb" => thumb = true,
             "-f" | "--files" => files = true,
-            "-r" | "--resume" => resume = true,
             "-d" | "--dir" => {
                 let val = args.next().unwrap_or_else(|| {
                     eprintln!("ERROR: {} requires a value", arg);
@@ -79,7 +76,7 @@ pub fn parse_args() -> Config {
                     }
                 };
             }
-            "-R" | "--retries" => {
+            "-r" | "--retries" => {
                 let val = args.next().unwrap_or_else(|| {
                     eprintln!("ERROR: {} requires a value", arg);
                     std::process::exit(1);
@@ -108,7 +105,7 @@ pub fn parse_args() -> Config {
         std::process::exit(1);
     });
 
-    Config { url, dir, exporter, thumb, files, resume, download_retries }
+    Config { url, dir, exporter, thumb, files, download_retries }
 }
 
 fn render_event(event: &Event) {

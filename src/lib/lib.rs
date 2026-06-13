@@ -65,7 +65,7 @@ fn run_download(posts: &[Post], config: &config::Config, tx: Sender<event::Event
             let (url, fallback) = get_url(f);
             let filename = url.rsplit("/").next().unwrap_or(fallback).trim();
             let filepath = dir.join(filename);
-            if config.resume && filepath.exists() {
+            if filepath.exists() {
                 tx.send(event::Event::DownloadSkipped { index, max_index })?;
                 index += 1;
                 continue

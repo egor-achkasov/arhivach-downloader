@@ -7,6 +7,5 @@ pub struct Config {
     pub exporter: ExporterKind,
     pub thumb: bool,
     pub files: bool,
-    pub resume: bool,
     pub download_retries: u32,
 }
