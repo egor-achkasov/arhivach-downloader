@@ -52,22 +52,13 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Build CLI
-        run: cargo build --release --bin arhivach-downloader-cli
-
-      - name: Build TUI
-        run: cargo build --release --bin arhivach-downloader-tui
+        run: cargo build --release --bin arhivach-downloader
 
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
         with:
-          name: arhivach-downloader-cli
-          path: target/release/arhivach-downloader-cli.exe
-
-      - name: Upload TUI artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: arhivach-downloader-tui
-          path: target/release/arhivach-downloader-tui.exe
+          name: arhivach-downloader
+          path: target/release/arhivach-downloader.exe
 
   release:
     needs: build
@@ -83,13 +74,7 @@ jobs:
       - name: Download CLI artifact
         uses: actions/download-artifact@v4
         with:
-          name: arhivach-downloader-cli
-          path: artifacts/
-
-      - name: Download TUI artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: arhivach-downloader-tui
+          name: arhivach-downloader
           path: artifacts/
 
       - name: Generate changelog
@@ -122,5 +107,4 @@ jobs:
             ## Changes
             ${{ steps.changelog.outputs.CHANGELOG }}
           files: |
-            artifacts/arhivach-downloader-cli.exe
-            artifacts/arhivach-downloader-tui.exe
+            artifacts/arhivach-downloader.exe

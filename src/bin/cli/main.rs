@@ -7,7 +7,7 @@ use std::sync::mpsc::channel;
 
 static HELP: &str = "Download threads from arhivach.
 
-Usage: arhivach-downloader-cli.exe [OPTIONS] <URL>
+Usage: arhivach-downloader [OPTIONS] <URL>
 
 Arguments:
   <URL>  URL to download

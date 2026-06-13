@@ -6,18 +6,14 @@ Download threads from arhivach.vc and save them locally for offline access or pr
 
 # Usage
 
-## TUI
-
-Run arhivach-downloader-tui, paste the url in the first field, fill the arguments (see description the the CLI subsection) and press Enter.
-
 ## CLI
 
-`arhivach-downloader-cli --help`:
+`arhivach-downloader --help`:
 
 ```
 Download threads from arhivach.
 
-Usage: arhivach-downloader-cli [OPTIONS] <URL>
+Usage: arhivach-downloader [OPTIONS] <URL>
 
 Arguments:
   <URL>  URL to download
@@ -51,18 +47,14 @@ Use `-R`/`--retries` to control how many times a failed download is retried (def
 
 # Использование
 
-## TUI
-
-Запустите arhivach-downloader-tui, вставьте ссылку в первое поле, заполните аргументы (описание см. в подразделе CLI) и нажмите Enter.
-
 ## CLI
 
-`arhivach-downloader-cli --help`:
+`arhivach-downloader --help`:
 
 ```
 Download threads from arhivach.
 
-Usage: arhivach-downloader-cli [OPTIONS] <URL>
+Usage: arhivach-downloader [OPTIONS] <URL>
 
 Arguments:
   <URL>  URL to download

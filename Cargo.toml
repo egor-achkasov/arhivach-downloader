@@ -12,15 +12,9 @@ strip = "symbols"
 path = "src/lib/lib.rs"
 
 [[bin]]
-name = "arhivach-downloader-cli"
+name = "arhivach-downloader"
 path = "src/bin/cli/main.rs"
 
-[[bin]]
-name = "arhivach-downloader-tui"
-path = "src/bin/tui/main.rs"
-
 [dependencies]
-arboard = "3"
-ratatui = "0.29"
 scraper = "0.25.0"
 ureq = "3.3.0"
